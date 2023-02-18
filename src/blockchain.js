@@ -52,19 +52,34 @@ class Blockchain {
     /**
      * _addBlock(block) will store a block in the chain
      * @param {*} block 
-     * The method will return a Promise that will resolve with the block added
-     * or reject if an error happen during the execution.
-     * You will need to check for the height to assign the `previousBlockHash`,
-     * assign the `timestamp` and the correct `height`...At the end you need to 
-     * create the `block hash` and push the block into the chain array. Don't for get 
-     * to update the `this.height`
+     * The method will return a Promise that will resolve with the block added ✓
+     * or reject if an error happen during the execution. ✓
+     * 
+     * You will need to check for the height to assign the `previousBlockHash`, ✓
+     * assign the `timestamp` and the correct `height`...At the end you need to  ✓
+     * create the `block hash` ✓
+     * push the block into the chain array. ✓
+     * Don't forget to update the `this.height` ✓
+     * 
      * Note: the symbol `_` in the method name indicates in the javascript convention 
      * that this method is a private method. 
      */
     _addBlock(block) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-
+            block.height = self.chain.length;
+            block.time = parseInt(new Date().getTime().toString().slice(0, -3));
+            if (self.chain.length > 0) {
+                block.previousHash = self.chain[self.chain.length - 1].hash;
+            }
+            block.hash = SHA256(JSON.stringify(self)).toString();
+            self.chain.push(block);
+            self.height++;
+            if (block.hash) {
+                resolve(block);
+            } else {
+                reject(Error("Block not added."));
+            }
         });
     }
 
@@ -78,7 +93,7 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-
+            resolve(`${address}:${new Date().getTime().toString().slice(0, -3)}: starRegistry`);
         });
     }
 
@@ -102,7 +117,17 @@ class Blockchain {
     submitStar(address, message, signature, star) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-
+            let time = parseInt(message.split(':')[1]);
+            let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            if (time + 5 * 60 * 1000 >= currentTime) {
+                if (bitcoinMessage.verify(message, address, signature)) {
+                    resolve(await self._addBlock(new BlockClass.Block({ owner: address, star: star })));
+                } else {
+                    reject("Message not verified.");
+                }
+            } else {
+                reject("5 min not elapsed");
+            }
         });
     }
 
@@ -115,7 +140,12 @@ class Blockchain {
     getBlockByHash(hash) {
         let self = this;
         return new Promise((resolve, reject) => {
-
+            let block = self.chain.filter(block => block.hash === hash)[0];
+            if (block) {
+                resolve(block);
+            } else {
+                resolve(null);
+            }
         });
     }
 
@@ -146,7 +176,20 @@ class Blockchain {
         let self = this;
         let stars = [];
         return new Promise((resolve, reject) => {
+            self.chain.forEach(block => {
+                const data = block.getBData();
+                if (data) {
+                    if (data.owner === address) {
+                        stars.push(data);
+                    }
+                }
+            });
 
+            const decoded = stars.map(star => {
+                star.body = hex2ascii(star.body);
+                return star
+            })
+            resolve(decoded);
         });
     }
 
@@ -160,7 +203,16 @@ class Blockchain {
         let self = this;
         let errorLog = [];
         return new Promise(async (resolve, reject) => {
-
+            for (let block of self.chain) {
+                if (await block.validate()) {
+                    if (self.chain[block.height - 1].hash === block.previousBlockHash) {
+                        errorLog.push(new Error(`Hash does not match previous hash.`));
+                    }
+                } else {
+                    errorLog.push(new Error(`Invalid block.`));
+                }
+            }
+            resolve(errorLog);
         });
     }
 
