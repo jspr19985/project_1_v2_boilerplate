@@ -70,7 +70,7 @@ class Blockchain {
             block.height = self.chain.length;
             block.time = parseInt(new Date().getTime().toString().slice(0, -3));
             if (self.chain.length > 0) {
-                block.previousHash = self.chain[self.chain.length - 1].hash;
+                block.previousBlockHash = self.chain[self.chain.length - 1].hash;
             }
             block.hash = SHA256(JSON.stringify(self)).toString();
             self.chain.push(block);
@@ -93,7 +93,7 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-            resolve(`${address}:${new Date().getTime().toString().slice(0, -3)}: starRegistry`);
+            resolve(`${address}:${new Date().getTime().toString().slice(0, -3)}:starRegistry`);
         });
     }
 
@@ -119,14 +119,16 @@ class Blockchain {
         return new Promise(async (resolve, reject) => {
             let time = parseInt(message.split(':')[1]);
             let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
-            if (time + 5 * 60 * 1000 >= currentTime) {
+            let timeElapsed = currentTime - time;
+
+            if (timeElapsed < 300) {
                 if (bitcoinMessage.verify(message, address, signature)) {
-                    resolve(await self._addBlock(new BlockClass.Block({ owner: address, star: star })));
+                    resolve(await self._addBlock(new BlockClass.Block({ star, address })));
                 } else {
                     reject("Message not verified.");
                 }
             } else {
-                reject("5 min not elapsed");
+                reject("over 5 min elapsed");
             }
         });
     }
@@ -175,21 +177,14 @@ class Blockchain {
     getStarsByWalletAddress(address) {
         let self = this;
         let stars = [];
-        return new Promise((resolve, reject) => {
-            self.chain.forEach(block => {
-                const data = block.getBData();
-                if (data) {
-                    if (data.owner === address) {
-                        stars.push(data);
-                    }
+        return new Promise(async (resolve, reject) => {
+            for (const block of self.chain) {
+                let bData = await block.getBData();
+                if (bData && bData.address == address) {
+                    stars.push(bData.star);
                 }
-            });
-
-            const decoded = stars.map(star => {
-                star.body = hex2ascii(star.body);
-                return star
-            })
-            resolve(decoded);
+            }
+            resolve(stars);
         });
     }
 
