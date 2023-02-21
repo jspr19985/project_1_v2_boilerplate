@@ -27,7 +27,6 @@ class BlockchainController {
                 if (block) {
                     return res.status(200).json(block);
                 } else {
-                    console.log("Block Not Found!");
                     return res.status(404).send("Block Not Found!");
                 }
             } else {
